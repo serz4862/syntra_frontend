@@ -16,13 +16,58 @@ export default function Login() {
   const submit = async (e) => {
     e.preventDefault();
     try {
-      const res = await api.post("http://localhost:8000/login", { email, password });
-      const { token, user } = res.data;
+      const res = await api.post("/login", { email, password });
+
+      
+
+      let token = res.data.token || res.data.accessToken;
+      let user = res.data.user || res.data.data || {};
+      
+
+      if (!user.role && token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          user = {
+            ...user,
+            userId: payload.userId || payload.id || payload._id,
+            email: payload.email || email,
+            role: payload.role
+          };
+        } catch (decodeErr) {
+          console.error("Token decode error:", decodeErr);
+        }
+      }
+      
+
+      if (!user.role && res.data) {
+        user = {
+          ...user,
+          userId: res.data.userId || res.data.id || res.data._id,
+          email: res.data.email || email,
+          role: res.data.role
+        };
+      }
+      
+      if (!token) {
+        throw new Error("No token received from server");
+      }
+      
+      if (!user || !user.role) {
+        throw new Error("User data or role not found in response");
+      }
+      
+
+      const normalizedRole = (user.role || "").toLowerCase();
+      
       saveAuth(token, user);
-      navigate(user.role === "manager" ? "/manager" : "/engineer");
+      
+
+      const dashboardPath = normalizedRole === "manager" ? "/manager" : "/engineer";
+      console.log("Navigating to:", dashboardPath, "for role:", normalizedRole);
+      navigate(dashboardPath, { replace: true });
     } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.message || "Login failed");
+      console.error("Login error:", err);
+      alert(err.response?.data?.message || err.message || "Login failed");
     }
   };
 
